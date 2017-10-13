@@ -90,18 +90,19 @@ def add_or_rename_remote(repo_name, user_name, possible_old_names, verbose=True)
     repo_giturl = 'git@github.com:{}/{}.git'.format(user_name, repo_name)
 
     for old_name in possible_old_names:
-        cmd = 'git remote get-url ' + old_name
+        cmd = 'git ls-remote --get-url ' + old_name
         procres = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
         if procres.returncode == 0:
             out = procres.stdout.decode().strip()
-            print('CHECKING THE', out, (repo_httpsurl, repo_giturl))
             if out in (repo_httpsurl, repo_giturl):
-
                 if verbose:
                     print('Renaming', old_name, 'to', user_name)
                 cmd = 'git remote rename {} {}'.format(old_name, user_name)
                 subprocess.run(cmd, shell=True, check=True)
                 break
+        else:
+            print(procres.stdout)
     else:
         cmd = 'git remote add {} {}'.format(user_name, repo_giturl)
         if verbose:
@@ -157,4 +158,4 @@ if __name__ == '__main__':
             print('org_name/repo_name must be given as two arguments or "org_name/repo_name"')
         sys.exit(2)
 
-    sys.exit(main(repo_name, org_name, parsed.user, not parsed.quiet))
+    sys.exit(main(repo_name, org_name, parsed.user, parsed.browser, not parsed.quiet))
