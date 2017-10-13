@@ -1,5 +1,5 @@
 # sanity-preserving-gh-workflow
-A script to make it easier to have a github forking workflow that keeps me from getting confused about which "master", "upstream", "origin", etc. that I'm working on.
+A command-line script to make it easier to have a github forking workflow that keeps me from getting confused about which "master", "upstream", "origin", etc. that I'm working on.
 
 The key elements are:
 1. Have the local clone "master" branch only point to the master branch of the "upstream" repository (i.e., not my fork)
