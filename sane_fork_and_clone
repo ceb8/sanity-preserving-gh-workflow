@@ -1,0 +1,160 @@
+#!/usr/bin/env python
+
+"""
+A script to simplify the github forking-and-local-setup process
+
+Requires that git be installed (and accessible from the shell), and Python >= 3.5
+"""
+
+import os
+import sys
+import argparse
+import subprocess
+import webbrowser
+import configparser
+
+
+def main(repo_name, org_name, forked_name, open_browser=False, verbose=True):
+    main_repo = org_name + '/' + repo_name
+    forked_repo = forked_name + '/' + repo_name
+
+    if verbose:
+        print_ = print
+    else:
+        print_ = lambda x: None
+
+    main_exists = check_if_repo_exists(main_repo)
+    if not main_exists:
+        print_('Could not find the repo {} on github... can\'t do anything'.format(main_repo))
+        return 3
+
+    fork_exists = check_if_repo_exists(forked_repo)
+
+    if not fork_exists:
+        main_repo_url = 'https://github.com/' + main_repo
+
+        if open_browser:
+            webbrowser.open(main_repo_url)
+        input("The fork {} does not exist.  You'll need to go to {} and create that fork.  Press enter when you've done that.".format(forked_repo, main_repo_url))
+
+        if not check_if_repo_exists(forked_repo):
+            print_(forked_repo, "still doesn't exist, so I'm just giving up.")
+            return 4
+        else:
+            fork_exists = True
+
+    # now go into the repo directory after creating it if need be
+    if os.path.isdir(repo_name):
+        print_('Looks like', repo_name, "already exists locally, so we won't clone now")
+    else:
+        cmd = 'git clone git@github.com:{}.git'.format(main_repo)
+        subprocess.run(cmd, shell=True)
+    os.chdir(os.path.join('.', repo_name))
+
+    # now add the remotes if possible
+    add_or_rename_remote(repo_name, org_name, ['origin', 'upstream'], verbose)
+    add_or_rename_remote(repo_name, forked_name, ['origin'], verbose)
+
+    print_("Fetching both to ensure they are all good")
+    subprocess.run('git fetch {} '.format(org_name), shell=True, check=True)
+    subprocess.run('git fetch {} '.format(forked_name), shell=True, check=True)
+
+    res = None
+    while res not in ['y', '']:
+        res = input('Do you also want to rename the fork\'s "master" to staging? [y]/n:')
+        if res.lower() == 'n':
+            print_("Then we're all done! cd into {} to get started".format(repo_name))
+            return 0
+
+    print_('Pushing the local master to a "staging" branch on', forked_name)
+    cmd = 'git push {} master:staging'.format(forked_name)
+    subprocess.run(cmd, shell=True, check=True)
+    branch_settings_url = 'https://github.com/{}/{}/settings/branches'.format(forked_name, repo_name)
+    if open_browser:
+        webbrowser.open(branch_settings_url)
+    input('Now go to {} and change the default branch to staging. Press enter to continue once this is done.'.format(branch_settings_url))
+    procres = subprocess.run('git rev-parse --abbrev-ref master@{u}', shell=True, stdout=subprocess.PIPE)
+    master_upstream = procres.stdout.decode().strip()
+    if org_name not in master_upstream:
+        print_('resetting local master to point to', org_name)
+        cmd = 'git branch --set-upstream-to={}/master master'.format(org_name)
+        subprocess.run(cmd, shell=True)
+    print_('Deleting the fork\'s "master" branch')
+    subprocess.run('git push {} :master'.format(forked_name), shell=True, check=True)
+    print_('All set up! cd into {} to get started'.format(repo_name))
+    return 0
+
+
+def add_or_rename_remote(repo_name, user_name, possible_old_names, verbose=True):
+    repo_httpsurl = 'https://github.com/{}/{}.git'.format(user_name, repo_name)
+    repo_giturl = 'git@github.com:{}/{}.git'.format(user_name, repo_name)
+
+    for old_name in possible_old_names:
+        cmd = 'git remote get-url ' + old_name
+        procres = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if procres.returncode == 0:
+            out = procres.stdout.decode().strip()
+            print('CHECKING THE', out, (repo_httpsurl, repo_giturl))
+            if out in (repo_httpsurl, repo_giturl):
+
+                if verbose:
+                    print('Renaming', old_name, 'to', user_name)
+                cmd = 'git remote rename {} {}'.format(old_name, user_name)
+                subprocess.run(cmd, shell=True, check=True)
+                break
+    else:
+        cmd = 'git remote add {} {}'.format(user_name, repo_giturl)
+        if verbose:
+            print('Adding remote', user_name)
+        subprocess.run(cmd, shell=True, check=True)
+
+
+def check_if_repo_exists(reponame, show_output=False):
+    if show_output:
+        stds = None
+    else:
+        stds = subprocess.DEVNULL
+
+    cmd = 'git ls-remote https://github.com/{}'.format(reponame)
+    procres = subprocess.run(cmd, shell=True, stdout=stds, stderr=stds)
+    return procres.returncode == 0
+
+
+def get_github_user_from_config(verbose=True):
+    config = configparser.ConfigParser()
+    fn = os.path.join(os.environ['HOME'], '.gitconfig')
+    if not os.path.isfile(fn):
+        raise IOError('$HOME/.gitconfig not found')
+    config.read(fn)
+    return config.get('github', 'user')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('org_name/repo_name', nargs='+', help='the org and repo name for the *upstream* repo')
+    parser.add_argument('--user', '-u', help='the github user name for the *fork*')
+    parser.add_argument('--browser', '-b', action='store_true', help='if set, will automatically open your browser at relevant points for github interactions')
+    parser.add_argument('--quiet', '-q', action='store_true')
+
+    parsed = parser.parse_args()
+
+    if parsed.user is None:
+        try:
+            parsed.user = get_github_user_from_config()
+        except configparser.NoOptionError:
+            if verbose:
+                print("No github user given and could not find it in the local .gitconfig")
+            sys.exit(1)
+
+    names = getattr(parsed, 'org_name/repo_name')
+    if len(names) == 1 and len(names[0].split('/')) == 2:
+        org_name, repo_name = names[0].split('/')
+    elif len(names) == 2:
+        org_name, repo_name = names
+    else:
+        if verbose:
+            print('org_name/repo_name must be given as two arguments or "org_name/repo_name"')
+        sys.exit(2)
+
+    sys.exit(main(repo_name, org_name, parsed.user, not parsed.quiet))
