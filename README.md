@@ -10,4 +10,4 @@ The script in this repo will ensure those are met when you clone a new repo.  Ju
 ```
 $ sane_fork_and_clone eteq/sanity-preserving-gh-workflow
 ```
-once that's done you'll have a `sanity-preserving-gh-workflow` directory inside wherever you ran it, with remotes named "eteq" and "<your user name>", and the local master will point to "eteq". You can use ``sane_fork_and_clone --help`` to see the additional command-line options.
+once that's done you'll have a `sanity-preserving-gh-workflow` directory inside wherever you ran it, with remotes named "eteq" and "{your user name}", and the local master will point to "eteq". You can use ``sane_fork_and_clone --help`` to see the additional command-line options.
