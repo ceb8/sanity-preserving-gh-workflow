@@ -14,7 +14,7 @@ import webbrowser
 import configparser
 
 
-def main(repo_name, org_name, forked_name, open_browser=False, verbose=True):
+def main(repo_name, org_name, forked_name, open_browser=False, https=False, verbose=True):
     main_repo = org_name + '/' + repo_name
     forked_repo = forked_name + '/' + repo_name
 
@@ -47,7 +47,10 @@ def main(repo_name, org_name, forked_name, open_browser=False, verbose=True):
     if os.path.isdir(repo_name):
         print_('Looks like', repo_name, "already exists locally, so we won't clone now")
     else:
-        cmd = 'git clone git@github.com:{}.git'.format(main_repo)
+        if https:
+            cmd = 'git clone https://github.com/{}.git'.format(main_repo)
+        else:
+            cmd = 'git clone git@github.com:{}.git'.format(main_repo)
         subprocess.run(cmd, shell=True)
     os.chdir(os.path.join('.', repo_name))
 
@@ -85,7 +88,7 @@ def main(repo_name, org_name, forked_name, open_browser=False, verbose=True):
     return 0
 
 
-def add_or_rename_remote(repo_name, user_name, possible_old_names, verbose=True):
+def add_or_rename_remote(repo_name, user_name, possible_old_names, https=False, verbose=True):
     repo_httpsurl = 'https://github.com/{}/{}.git'.format(user_name, repo_name)
     repo_giturl = 'git@github.com:{}/{}.git'.format(user_name, repo_name)
 
@@ -104,7 +107,10 @@ def add_or_rename_remote(repo_name, user_name, possible_old_names, verbose=True)
         else:
             print(procres.stdout)
     else:
-        cmd = 'git remote add {} {}'.format(user_name, repo_giturl)
+        if https:
+            cmd = 'git remote add {} {}'.format(user_name, repo_httpsurl)
+        else:
+            cmd = 'git remote add {} {}'.format(user_name, repo_giturl)
         if verbose:
             print('Adding remote', user_name)
         subprocess.run(cmd, shell=True, check=True)
@@ -136,6 +142,7 @@ if __name__ == '__main__':
     parser.add_argument('org_name/repo_name', nargs='+', help='the org and repo name for the *upstream* repo')
     parser.add_argument('--user', '-u', help='the github user name for the *fork*')
     parser.add_argument('--browser', '-b', action='store_true', help='if set, will automatically open your browser at relevant points for github interactions')
+    parser.add_argument('--https','-t', action='store_true', help='if set, use the https rather than ssh')
     parser.add_argument('--quiet', '-q', action='store_true')
 
     parsed = parser.parse_args()
@@ -158,4 +165,4 @@ if __name__ == '__main__':
             print('org_name/repo_name must be given as two arguments or "org_name/repo_name"')
         sys.exit(2)
 
-    sys.exit(main(repo_name, org_name, parsed.user, parsed.browser, not parsed.quiet))
+    sys.exit(main(repo_name, org_name, parsed.user, parsed.browser, parsed.https, not parsed.quiet))
